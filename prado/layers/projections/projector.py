@@ -166,12 +166,26 @@ class PradoProjector(nn.Module, Projector):
     # endregion
 
     def transform_text(self, text: str) -> Any:
+        # First we preprocess the text a bit - decorators are
+        # all characters excluding alphanumerics, whitespace and
+        # single quotes (') and we insert spaces between them.
+        decorator_separated_text = constants.DECORATOR_GROUP_REGEX.sub(r" \1 ", text)
+
+        # Then we convert all double-quotes to single quotes
+        single_quote_text = constants.DOUBLE_QUOTE_REGEX.sub(
+            "'", decorator_separated_text
+        )
+
+        # Then we unquote the text, replacing quoted content with
+        # what is between those quotes.
+        unquoted_text = constants.QUOTED_TEXT_REGEX.sub(r" \1 ", single_quote_text)
+
         # (N, ) - note that we will remove meaningless tokens
         # from the nltk tokenization, check the regex to fully
         # understand what that means.
         tokens = [
-            token
-            for token in nltk.tokenize.word_tokenize(text)
+            token.lower()
+            for token in nltk.tokenize.word_tokenize(unquoted_text)
             if constants.MEANINGLESS_REGEX.fullmatch(token) is None
         ]
 
