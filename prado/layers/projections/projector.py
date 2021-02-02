@@ -168,10 +168,10 @@ class PradoProjector(nn.Module, Projector):
     def transform_text(self, text: str) -> Any:
         # First we preprocess the text a bit - decorators are
         # all characters excluding alphanumerics, whitespace and
-        # single quotes (') and we insert spaces between them.
+        # single quotes ('); we insert spaces around them.
         decorator_separated_text = constants.DECORATOR_GROUP_REGEX.sub(r" \1 ", text)
 
-        # Then we convert all double-quotes to single quotes
+        # Then we convert all double-quotes to single quotes.
         single_quote_text = constants.DOUBLE_QUOTE_REGEX.sub(
             "'", decorator_separated_text
         )
@@ -182,7 +182,8 @@ class PradoProjector(nn.Module, Projector):
 
         # (N, ) - note that we will remove meaningless tokens
         # from the nltk tokenization, check the regex to fully
-        # understand what that means.
+        # understand what that means. Regardless, N might not
+        # represent the length of vanilla-tokenized text.
         tokens = [
             token.lower()
             for token in nltk.tokenize.word_tokenize(unquoted_text)
@@ -196,6 +197,9 @@ class PradoProjector(nn.Module, Projector):
 
         token_features = list()
 
+        # In case we didn't clear the hash object before this.
+        self._hashobj.clear()
+
         for token in tokens:
             self._hashobj.update(token)
 
@@ -208,12 +212,17 @@ class PradoProjector(nn.Module, Projector):
             token_as_bits = bitarray.bitarray()
             token_as_bits.frombytes(token_as_bytes)
 
-            # (2B, ) (note that self.feature_length is B)
-            torch_bits = torch.tensor(
-                token_as_bits[: 2 * self.feature_length], dtype=torch.float
-            )
+            # (2B, ) - MinHash can give us larger hashes than
+            # we need. It is recommended to set B up so this
+            # doesn't destroy/skip data. In other words, B should
+            # be a multiplier of 16.
+            torch_bits = torch.tensor(token_as_bits[: 2 * self.B], dtype=torch.float)
 
             token_features.append(torch_bits)
+
+            # We clear the hash object here because each word
+            # hash should be independent of the previous word
+            # hashes.
             self._hashobj.clear()
 
         # (N, 2B)
@@ -227,7 +236,7 @@ class PradoProjector(nn.Module, Projector):
 
         return fingerprint
 
-    # Why so clunky? Because reprocessing inputs should yield
+    # Why so clunky? Because preprocessing inputs should yield
     # better throughput and ONNX should quantize the rest of the
     # model better since it's more like an ordinary DL model.
     def forward(self, x: torch.Tensor) -> torch.Tensor:
