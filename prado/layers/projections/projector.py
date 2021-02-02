@@ -189,6 +189,11 @@ class PradoProjector(nn.Module, Projector):
             if constants.MEANINGLESS_REGEX.fullmatch(token) is None
         ]
 
+        # Fallback to a single empty string as a token if all
+        # tokens are eliminated for some reason.
+        if len(tokens) == 0:
+            tokens = [""]
+
         token_features = list()
 
         for token in tokens:
