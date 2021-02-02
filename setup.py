@@ -22,12 +22,12 @@ def readme():
 
 setup(
     name="prado",
-    version="0.1.2",
+    version="0.2.0",
     description="The PyTorch implementation of PRADO",
     long_description=readme(),
     long_description_content_type="text/markdown",
     classifiers=[
-        "Development Status :: 2 - Pre-Alpha",
+        "Development Status :: 3 - Alpha",
         "Environment :: GPU",
         "Intended Audience :: Science/Research",
         "License :: OSI Approved :: Apache Software License",
@@ -41,6 +41,13 @@ setup(
     author_email="headsouldev@gmail.com",
     license="Apache License 2.0",
     packages=["prado"],
+    install_requires=[
+        "bitarray",
+        "datasketch",
+        "masked-convolution",
+        "nltk",
+        "tqdm",
+    ],
     include_package_data=True,
     zip_safe=False,
 )
