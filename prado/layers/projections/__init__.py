@@ -1,2 +1,2 @@
 from .projection_operator import ProjectionOperator, PradoProjectionOperator
-from .projector import PradoProjector, PradoProjectorConfig
+from .projector import Projector, PradoProjector, PradoProjectorConfig

@@ -22,7 +22,7 @@ def readme():
 
 setup(
     name="prado",
-    version="0.2.8",
+    version="0.3.0",
     description="The PyTorch implementation of PRADO",
     long_description=readme(),
     long_description_content_type="text/markdown",

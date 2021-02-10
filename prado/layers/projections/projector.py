@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 import bitarray
 from datasketch import MinHash
 import farmhash
+import numpy as np
 import torch
 
 from . import assertion
@@ -11,14 +12,18 @@ from .projection_operator import PradoProjectionOperator
 
 
 class Projector:
-    pass
+    def project(self, x: str):
+        raise NotImplementedError
+
+    def __call__(self, x):
+        raise NotImplementedError
 
 
 class PradoProjectorConfig:
     __feature_length_key = "feature_length"
 
     @staticmethod
-    def _check_init_args(self, feature_length: int):
+    def _check_init_args(feature_length: int):
         assertion.assert_type("feature_length", feature_length, int)
 
         assertion.assert_positive("feature_length", feature_length)
@@ -57,6 +62,8 @@ class PradoProjector(Projector):
         self._hashobj = MinHash(num_perm=self.n_permutations, hashfunc=farmhash.hash32)
         self._projection_operator = PradoProjectionOperator()
 
+        self._vectorized_projection = np.vectorize(self.project, signature="()->(n)")
+
     # region Properties
     @property
     def feature_length(self) -> int:
@@ -72,44 +79,39 @@ class PradoProjector(Projector):
 
     # endregion
 
-    def forward(self, x: List[str]) -> torch.Tensor:
-        # In case we didn't clear the hash object before this.
+    def project(self, x: str):
         self._hashobj.clear()
+        self._hashobj.update(x)
 
-        token_features = list()
+        # (4 * n_permutations, )
+        token_as_bytes = b"".join(
+            int(x).to_bytes(4, "big") for x in self._hashobj.digest()
+        )
 
-        for token in x:
-            self._hashobj.update(token)
+        # (32 * n_permutations, )
+        token_as_bits = bitarray.bitarray()
+        token_as_bits.frombytes(token_as_bytes)
 
-            # (4 * n_permutations, )
-            token_as_bytes = b"".join(
-                int(x).to_bytes(4, "big") for x in self._hashobj.digest()
-            )
+        # (2B, ) - MinHash can give us larger hashes than
+        # we need. It is recommended to set B up so this
+        # doesn't destroy/skip data. In other words, B should
+        # be a multiplier of 16.
+        return torch.tensor(token_as_bits[: 2 * self.B], dtype=torch.float)
 
-            # (32 * n_permutations, )
-            token_as_bits = bitarray.bitarray()
-            token_as_bits.frombytes(token_as_bytes)
-
-            # (2B, ) - MinHash can give us larger hashes than
-            # we need. It is recommended to set B up so this
-            # doesn't destroy/skip data. In other words, B should
-            # be a multiplier of 16.
-            torch_bits = torch.tensor(token_as_bits[: 2 * self.B], dtype=torch.float)
-
-            token_features.append(torch_bits)
-
-            # We clear the hash object here because each word
-            # hash should be independent of the previous word
-            # hashes.
-            self._hashobj.clear()
-
-        # (N, 2B)
+    def __call__(self, x: List) -> torch.Tensor:
+        # Can be anything, (Any, N[str]) -> (Any, N, 2B)
+        token_features = self._vectorized_projection(x)
         token_features = torch.tensor(token_features, dtype=torch.float)
 
-        # (N, B, 2)
-        token_features = torch.reshape(token_features, (token_features.shape[0], -1, 2))
+        # (Any, N, 2B) -> (Any, N, B, 2)
+        token_features = torch.reshape(
+            token_features, (*token_features.shape[:-1], -1, 2)
+        )
 
-        # (N, B)
+        # (Any, N, B, 2) -> (Any, N, B, 1)
         fingerprint = self._projection_operator(token_features)
+
+        # (Any, N, B, 1) -> (Any, N, B)
+        fingerprint = torch.squeeze(fingerprint, dim=-1)
 
         return fingerprint

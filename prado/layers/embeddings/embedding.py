@@ -1,6 +1,7 @@
 import copy
 from typing import Any, Dict, Optional
 
+import torch
 from torch import nn
 
 from . import assertion
@@ -57,6 +58,8 @@ class PradoEmbedding(nn.Module):
         bias: bool = False,
         config: Optional[PradoEmbeddingConfig] = None,
     ):
+        super().__init__()
+
         if config is None:
             config = PradoEmbeddingConfig(
                 in_features=in_features, out_features=out_features, bias=bias
@@ -83,5 +86,5 @@ class PradoEmbedding(nn.Module):
 
     # endregion
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self._linear(x)

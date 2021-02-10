@@ -1,7 +1,6 @@
 import copy
 from typing import Optional
 
-import torch
 from torch import nn
 
 from .embeddings.embedding import PradoEmbedding
@@ -9,7 +8,8 @@ from .projections.projector import PradoProjector
 
 
 class ProjectedEmbeddingLayerConfig:
-    __feature_length_key = ("feature_length",)
+    # TODO Serialization
+    __feature_length_key = "feature_length"
     __embedding_length_key = "embedding_length"
 
     def __init__(self, feature_length: int, embedding_length: int):
@@ -26,15 +26,28 @@ class ProjectedEmbeddingLayer(nn.Module):
         embedding_length: int = None,
         config: Optional[ProjectedEmbeddingLayerConfig] = None,
     ):
+        super().__init__()
+
         if config is None:
+            # The reason we use these indirect values is because
+            # they are checked and corrected. It might seem
+            # counterintuitive to initialize the config after
+            # member variables, but this saves us from
+            # unnecessary validation.
             config = ProjectedEmbeddingLayerConfig(
-                feature_length=feature_length, embedding_length=embedding_length
+                feature_length=feature_length,
+                embedding_length=embedding_length,
             )
 
         self._config = copy.deepcopy(config)
 
         self._projection = PradoProjector(feature_length=self.B)
         self._embedding = PradoEmbedding(in_features=self.B, out_features=self.d)
+
+        # Do this to ensure that values which were corrected are
+        # correctly corrected in this config as well.
+        self._config.feature_length = self._projection.feature_length
+        self._config.embedding_length = self._embedding.out_features
 
     # region Properties
     @property

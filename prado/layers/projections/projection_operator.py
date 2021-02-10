@@ -22,7 +22,7 @@ class PradoProjectionOperator(nn.Module, ProjectionOperator):
         with torch.no_grad():
             self._linear.weight = nn.Parameter(
                 torch.tensor(
-                    [[-1], [1]],
+                    [[-1, 1]],
                     dtype=torch.float,
                 )
             )
