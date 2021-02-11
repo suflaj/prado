@@ -55,8 +55,6 @@ class PradoCore(nn.Module):
             feature_length=feature_length, embedding_length=embedding_length
         )
 
-        self._dropout = nn.Dropout(p=self.dropout)
-
         self._projected_attention_layers = nn.ModuleList(
             [
                 ProjectedAttentionLayer(
@@ -74,6 +72,9 @@ class PradoCore(nn.Module):
             out_features=self.out_features,
             bias=True,
         )
+
+        self._dropout = nn.Dropout(p=self.dropout)
+        self._tanh = nn.Tanh()
 
     # region Properties
     @property
@@ -117,11 +118,12 @@ class PradoCore(nn.Module):
     def forward(self, x: torch.Tensor):
         # (batch_size, N, 2B) -> (batch_size, N, d)
         projections = self._projected_embedding_layer(x)
+        projections = self._tanh(projections)
         projections = self._dropout(projections)
 
         # (batch_size, N, d) -> (batch_size, 1, N, d)
         projections = projections.reshape(
-            (*projections.shape[:1], 1, *projections.shape[1:])
+            (projections.shape[0], 1, *projections.shape[1:])
         )
 
         # (n_convolutions, batch_size, out_channels)
@@ -131,10 +133,11 @@ class PradoCore(nn.Module):
 
         # (n_convolution, batch_size, out_channels) ->
         # (batch_size, encoder_out_features)
-        flattened = torch.cat(features, dim=1)
+        flattened_features = torch.cat(features, dim=1)
+        flattened_features = self._tanh(flattened_features)
 
         # (batch_size, encoder_out_features) ->
         # (batch_size, out_features)
-        decoded = self._decoder(flattened)
+        decoded = self._decoder(flattened_features)
 
         return decoded
